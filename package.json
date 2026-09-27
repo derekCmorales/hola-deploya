@@ -1,0 +1,12 @@
+{
+  "name": "hola-deploya",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App mínima para la demo de Deploya",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
