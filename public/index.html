@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#f6f3ee">
+  <meta name="description" content="Rompe las capas de las cinco etapas y deja tu app Saludable. Demo de despliegue de Deploya.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>hola-deploya · arcade</title>
+  <link rel="icon" href="icono.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="estilos.css?v={{VERSION}}">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("deploya-tema");
+        var oscuro = t === "dark" || ((!t || t === "system") && matchMedia("(prefers-color-scheme: dark)").matches);
+        if (oscuro) document.documentElement.classList.add("dark");
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body data-version="{{VERSION}}">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-pausa" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
+      <symbol id="i-jugar" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+      <symbol id="i-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+      <symbol id="i-luna" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+      <symbol id="i-sonido" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+      <symbol id="i-mudo" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="m22 9-6 6m0-6 6 6"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6m0-6 6 6"/></symbol>
+      <symbol id="i-reintentar" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+      <symbol id="i-cohete" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+    </defs>
+  </svg>
+
+  <div id="app">
+    <header id="hud">
+      <div class="hud-fila">
+        <span class="wordmark" aria-label="deploya">deploy<span class="a">a</span></span>
+        <span class="hud-dato">
+          <span class="eyebrow">Puntos</span>
+          <b id="puntos" class="mono tnum">0</b>
+        </span>
+        <span class="hud-dato">
+          <span class="eyebrow">Vidas</span>
+          <span id="vidas" class="vidas" aria-label="3 vidas"></span>
+        </span>
+        <button id="btn-pausa" class="btn-icono" type="button" aria-label="Pausar" disabled>
+          <svg><use href="#i-pausa"/></svg>
+        </button>
+      </div>
+      <div class="riel" id="riel" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="hud-etapa mono">
+        <span id="etapa">Listo para desplegar</span>
+        <span id="efectos"></span>
+      </div>
+    </header>
+
+    <main id="escenario">
+      <canvas id="juego" width="180" height="320" aria-label="Tablero del juego"></canvas>
+      <p id="pista" class="pista mono" hidden>Toca para lanzar</p>
+      <p id="aviso" class="aviso px mono" role="status" aria-live="polite" hidden></p>
+
+      <section id="capa-menu" class="capa activa" aria-labelledby="titulo-menu">
+        <div class="panel px px-entrada">
+          <p class="eyebrow">Despliegue arcade</p>
+          <h1 id="titulo-menu" class="wordmark grande" aria-label="deploya">
+            <span style="--i:0">d</span><span style="--i:1">e</span><span style="--i:2">p</span><span style="--i:3">l</span><span style="--i:4">o</span><span style="--i:5">y</span><span class="a" style="--i:6">a</span>
+          </h1>
+          <p class="texto">Rompe las capas de las cinco etapas y deja tu app Saludable.</p>
+          <button class="btn primario px" type="button" data-accion="jugar">
+            <svg><use href="#i-cohete"/></svg>Desplegar
+          </button>
+          <button class="btn px" type="button" data-accion="ayuda">Cómo se juega</button>
+          <div class="ajustes">
+            <button class="btn-icono" type="button" data-accion="tema" aria-label="Cambiar tema">
+              <svg><use href="#i-luna"/></svg>
+            </button>
+            <span class="mono texto-sm">Mejor <b id="mejor" class="tnum">0</b></span>
+            <button class="btn-icono" type="button" data-accion="sonido" aria-label="Silenciar">
+              <svg><use href="#i-sonido"/></svg>
+            </button>
+          </div>
+        </div>
+        <p class="pie mono">
+          <span class="badge ok"><svg><use href="#i-check"/></svg>Saludable</span>
+          <span>hola-deploya · versión {{VERSION}}</span>
+        </p>
+      </section>
+
+      <section id="capa-ayuda" class="capa" aria-labelledby="titulo-ayuda">
+        <div class="panel px px-entrada izq">
+          <p class="eyebrow">Cómo se juega</p>
+          <h2 id="titulo-ayuda">Cinco etapas, un despliegue</h2>
+          <ul class="lista">
+            <li>Arrastra el dedo para mover la paleta y toca para lanzar.</li>
+            <li>En escritorio: mouse o <kbd>←</kbd> <kbd>→</kbd>, <kbd>Espacio</kbd> lanza, <kbd>P</kbd> pausa.</li>
+            <li>Rompe todas las capas de la etapa. Los bloques de metal no se rompen; los errores valen más.</li>
+          </ul>
+          <ul class="premios mono">
+            <li><i class="tono-ok">C</i>Caché: paleta ancha</li>
+            <li><i class="tono-signal">R</i>Réplica: dos bolas más</li>
+            <li><i class="tono-warn">+</i>Rollback: una vida más</li>
+            <li><i class="tono-muted">L</i>Lento: la bola frena</li>
+          </ul>
+          <button class="btn primario px" type="button" data-accion="menu">Entendido</button>
+        </div>
+      </section>
+
+      <section id="capa-etapa" class="capa" aria-labelledby="titulo-etapa">
+        <div class="panel px px-entrada izq">
+          <p class="eyebrow" id="etapa-num">Etapa 1 de 5</p>
+          <h2 id="titulo-etapa">Recepción</h2>
+          <pre class="bitacora mono" aria-live="polite"><span class="n">1</span><span id="comando"></span><span class="cursor"></span>
+<span class="n">2</span><span id="comando-ok" class="tono-ok"></span></pre>
+          <button class="btn primario px" type="button" data-accion="seguir">
+            <svg><use href="#i-jugar"/></svg>Seguir
+          </button>
+        </div>
+      </section>
+
+      <section id="capa-pausa" class="capa" aria-labelledby="titulo-pausa">
+        <div class="panel px px-entrada">
+          <p class="eyebrow">En pausa</p>
+          <h2 id="titulo-pausa">El despliegue espera</h2>
+          <button class="btn primario px" type="button" data-accion="reanudar">
+            <svg><use href="#i-jugar"/></svg>Reanudar
+          </button>
+          <button class="btn px" type="button" data-accion="menu">Salir al menú</button>
+        </div>
+      </section>
+
+      <section id="capa-fin" class="capa" aria-labelledby="titulo-fin">
+        <div class="panel px px-entrada">
+          <p id="fin-estado" class="badge"></p>
+          <h2 id="titulo-fin"></h2>
+          <p id="fin-texto" class="texto"></p>
+          <dl class="resumen mono">
+            <div><dt>Puntos</dt><dd id="fin-puntos" class="tnum">0</dd></div>
+            <div><dt>Mejor</dt><dd id="fin-mejor" class="tnum">0</dd></div>
+            <div><dt>Tiempo</dt><dd id="fin-tiempo" class="tnum">0 s</dd></div>
+          </dl>
+          <button class="btn primario px" type="button" data-accion="jugar">
+            <svg><use href="#i-reintentar"/></svg><span id="fin-boton">Desplegar otra vez</span>
+          </button>
+          <button class="btn px" type="button" data-accion="menu">Menú</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="juego.js?v={{VERSION}}" defer></script>
+</body>
+</html>
