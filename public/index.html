@@ -6,12 +6,16 @@
   <meta name="theme-color" content="#f6f3ee">
   <meta name="description" content="Rompe las capas de las cinco etapas y deja tu app Saludable. Demo de despliegue de Deploya.">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
   <title>hola-deploya · arcade</title>
   <link rel="icon" href="icono.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="preload" as="image" href="logo-claro.webp?v={{VERSION}}">
   <link rel="stylesheet" href="estilos.css?v={{VERSION}}">
   <script>
     (function () {
@@ -35,6 +39,7 @@
       <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6m0-6 6 6"/></symbol>
       <symbol id="i-reintentar" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+      <symbol id="i-qr" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3M21 21v.01M12 7v3a2 2 0 0 1-2 2H7M3 12h.01M12 3h.01M12 16v.01M16 12h1M21 12v.01M12 21v-1"/></symbol>
       <symbol id="i-cohete" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
     </defs>
   </svg>
@@ -42,7 +47,7 @@
   <div id="app">
     <header id="hud">
       <div class="hud-fila">
-        <span class="wordmark" aria-label="deploya">deploy<span class="a">a</span></span>
+        <span class="logo logo-hud" role="img" aria-label="deploya"><img class="logo-claro" src="logo-claro.webp?v={{VERSION}}" alt="" height="22" decoding="async"><img class="logo-oscuro" src="logo-oscuro.webp?v={{VERSION}}" alt="" height="22" decoding="async"></span>
         <span class="hud-dato">
           <span class="eyebrow">Puntos</span>
           <b id="puntos" class="mono tnum">0</b>
@@ -70,12 +75,15 @@
       <section id="capa-menu" class="capa activa" aria-labelledby="titulo-menu">
         <div class="panel px px-entrada">
           <p class="eyebrow">Despliegue arcade</p>
-          <h1 id="titulo-menu" class="wordmark grande" aria-label="deploya">
-            <span style="--i:0">d</span><span style="--i:1">e</span><span style="--i:2">p</span><span style="--i:3">l</span><span style="--i:4">o</span><span style="--i:5">y</span><span class="a" style="--i:6">a</span>
+          <h1 id="titulo-menu" class="titulo-logo">
+            <span class="logo logo-grande" role="img" aria-label="deploya"><img class="logo-claro" src="logo-claro.webp?v={{VERSION}}" alt="" height="60" decoding="async"><img class="logo-oscuro" src="logo-oscuro.webp?v={{VERSION}}" alt="" height="60" decoding="async"></span>
           </h1>
           <p class="texto">Rompe las capas de las cinco etapas y deja tu app Saludable.</p>
           <button class="btn primario px" type="button" data-accion="jugar">
             <svg><use href="#i-cohete"/></svg>Desplegar
+          </button>
+          <button class="btn px" type="button" data-accion="invitar">
+            <svg><use href="#i-qr"/></svg>Invitar
           </button>
           <button class="btn px" type="button" data-accion="ayuda">Cómo se juega</button>
           <div class="ajustes">
@@ -94,6 +102,21 @@
         </p>
       </section>
 
+      <section id="capa-invitar" class="capa" aria-labelledby="titulo-invitar">
+        <div class="panel px px-entrada">
+          <span class="logo logo-qr" role="img" aria-label="deploya"><img class="logo-claro" src="logo-claro.webp?v={{VERSION}}" alt="" height="44" decoding="async"><img class="logo-oscuro" src="logo-oscuro.webp?v={{VERSION}}" alt="" height="44" decoding="async"></span>
+          <h2 id="titulo-invitar" class="parpadeo mono">Escanea para jugar</h2>
+          <div class="qr-marco px">
+            <i class="esquina e1"></i><i class="esquina e2"></i><i class="esquina e3"></i><i class="esquina e4"></i>
+            <canvas id="qr" width="1" height="1" role="img" aria-label="Código QR de la dirección del juego"></canvas>
+            <p id="qr-estado" class="texto-sm">Generando código…</p>
+          </div>
+          <p id="qr-url" class="url mono"></p>
+          <p class="texto-sm">Apunta la cámara del celular. Sin instalar nada.</p>
+          <button class="btn primario px" type="button" data-accion="menu">Volver</button>
+        </div>
+      </section>
+
       <section id="capa-ayuda" class="capa" aria-labelledby="titulo-ayuda">
         <div class="panel px px-entrada izq">
           <p class="eyebrow">Cómo se juega</p>
@@ -103,11 +126,16 @@
             <li>En escritorio: mouse o <kbd>←</kbd> <kbd>→</kbd>, <kbd>Espacio</kbd> lanza, <kbd>P</kbd> pausa.</li>
             <li>Rompe todas las capas de la etapa. Los bloques de metal no se rompen; los errores valen más.</li>
           </ul>
+          <ul class="lista">
+            <li>Corta el combo y pierdes el multiplicador: cada 4 bloques sin tocar la paleta suben los puntos (hasta x5).</li>
+            <li>Incidentes en vivo: pico de tráfico (puntos x2), lluvia de commits, un bug que dispara errores y autoescalado.</li>
+          </ul>
           <ul class="premios mono">
             <li><i class="tono-ok">C</i>Caché: paleta ancha</li>
             <li><i class="tono-signal">R</i>Réplica: dos bolas más</li>
             <li><i class="tono-warn">+</i>Rollback: una vida más</li>
             <li><i class="tono-muted">L</i>Lento: la bola frena</li>
+            <li><i class="tono-bad">H</i>Hotfix: la paleta dispara</li>
           </ul>
           <button class="btn primario px" type="button" data-accion="menu">Entendido</button>
         </div>
@@ -117,6 +145,7 @@
         <div class="panel px px-entrada izq">
           <p class="eyebrow" id="etapa-num">Etapa 1 de 5</p>
           <h2 id="titulo-etapa">Recepción</h2>
+          <p id="etapa-bono" class="mono texto-sm tono-ok" hidden></p>
           <pre class="bitacora mono" aria-live="polite"><span class="n">1</span><span id="comando"></span><span class="cursor"></span>
 <span class="n">2</span><span id="comando-ok" class="tono-ok"></span></pre>
           <button class="btn primario px" type="button" data-accion="seguir">
@@ -139,6 +168,7 @@
       <section id="capa-fin" class="capa" aria-labelledby="titulo-fin">
         <div class="panel px px-entrada">
           <p id="fin-estado" class="badge"></p>
+          <p id="fin-record" class="badge signal parpadeo" hidden>Récord nuevo</p>
           <h2 id="titulo-fin"></h2>
           <p id="fin-texto" class="texto"></p>
           <dl class="resumen mono">
