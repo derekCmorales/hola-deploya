@@ -39,8 +39,32 @@
   const DT_MAX = 1 / 30;
   const PASO_MAX_PX = 2;
   const ARRASTRE_TOQUE_PX = 3;
-  const SENSIBILIDAD_TOQUE = 1.15;
+  const SENSIBILIDAD_TOQUE = 1.6;
   const ESTELA = 4;
+  const COMBO_POR_NIVEL = 4;
+  const MULTIPLICADOR_MAX = 5;
+  const PRIMER_EVENTO = [9, 14];
+  const ENTRE_EVENTOS = [15, 22];
+  const DURACION_PICO = 7;
+  const FACTOR_PICO = 1.15;
+  const COMMITS_POR_LLUVIA = 10;
+  const PUNTOS_COMMIT = 20;
+  const PUNTOS_BUG = 150;
+  const VIDA_BUG = 3;
+  const DURACION_BUG = 16;
+  const DURACION_ATURDIDO = 1;
+  const DURACION_HOTFIX = 6;
+  const CADENCIA_HOTFIX = 0.28;
+  const VEL_DISPARO = 230;
+  const VEL_PROYECTIL = 70;
+  const CAMARA_LENTA = 0.9;
+  const FACTOR_CAMARA_LENTA = 0.25;
+  const EFECTO_PALETA = 0.0016;
+  const EFECTO_PALETA_MAX = 0.3;
+  const BONO_PERFECTO = 500;
+  const BONO_TIEMPO_BASE = 600;
+  const BONO_TIEMPO_POR_S = 10;
+  const HUECO_ESCALADO = 64;
   const VERSION = document.body.dataset.version || "local";
 
   const ETAPAS = [
@@ -90,6 +114,7 @@
     replica: { letra: "R", tono: "signal", aviso: "Réplica: dos bolas más", aplicar: () => replicarBolas() },
     rollback: { letra: "+", tono: "warn", aviso: "Rollback: una vida más", aplicar: () => ganarVida() },
     lento: { letra: "L", tono: "muted-foreground", aviso: "Lento: la bola frena", aplicar: () => (efectos.lento = DURACION_LENTO) },
+    hotfix: { letra: "H", tono: "bad", aviso: "Hotfix: la paleta dispara", aplicar: () => (efectos.hotfix = DURACION_HOTFIX) },
   };
   const LISTA_PREMIOS = Object.keys(PREMIOS);
 
@@ -109,7 +134,16 @@
     C: ["xxx", "x..", "x..", "x..", "xxx"],
     R: ["xx.", "x.x", "xx.", "x.x", "x.x"],
     L: ["x..", "x..", "x..", "x..", "xxx"],
+    H: ["x.x", "x.x", "xxx", "x.x", "x.x"],
+    x: ["...", "x.x", ".x.", "x.x", "..."],
   };
+
+  const COMMIT = ["..x..", ".xxx.", "xx.xx", ".xxx.", "..x.."];
+
+  const BUG_GRANDE = [
+    ["..x.....x..", "...x...x...", "..xxxxxxx..", ".xx.xxx.xx.", "xxxxxxxxxxx", "x.xxxxxxx.x", "x.x.....x.x", "...xx.xx..."],
+    ["..x.....x..", "x..x...x..x", "x.xxxxxxx.x", "xxx.xxx.xxx", "xxxxxxxxxxx", ".xxxxxxxxx.", "..x.....x..", ".x.......x."],
+  ];
 
   const BICHO = [
     [".x...x.", "..xxx..", "xx.x.xx", "..xxx..", ".x...x."],
@@ -133,6 +167,9 @@
   ];
   const ESCALA_COHETE = 2;
   const COLORES_COHETE = { x: "foreground", o: "signal", f: "muted-foreground", y: "warn", z: "card" };
+
+  /** «a» pixel de la marca (x-altura) para la insignia del QR. */
+  const LETRA_A = [".xxxxxxxx.", "xxxxxxxxxx", "........xx", ".xxxxxxxxx", "xxxxxxxxxx", "xx......xx", "xx......xx", "xx......xx", "xxxxxxxxxx", ".xxxxxxxxx"];
 
   // ---------- Utilidades ----------
   const $ = (s) => document.querySelector(s);
@@ -233,8 +270,51 @@
       osc.start();
       osc.stop(c.currentTime + duracion);
     },
+    tonoEn(frecuencia, cuando, duracion, volumen, forma) {
+      if (!this.activo || !this.contexto) return;
+      const c = this.contexto;
+      const osc = c.createOscillator();
+      const gan = c.createGain();
+      osc.type = forma;
+      osc.frequency.value = frecuencia;
+      gan.gain.setValueAtTime(volumen, cuando);
+      gan.gain.exponentialRampToValueAtTime(0.0001, cuando + duracion);
+      osc.connect(gan).connect(c.destination);
+      osc.start(cuando);
+      osc.stop(cuando + duracion);
+    },
     arpegio(notas, paso = 0.07) {
       notas.forEach((n, i) => setTimeout(() => this.tono(n, 0.09, 0.04), i * paso * 1000));
+    },
+  };
+
+  /** Música chiptune: bajo y arpegio en La menor, programados con anticipación sobre el reloj de audio. */
+  const nota = (semitonos) => 440 * 2 ** (semitonos / 12);
+  const BAJO = [-36, -36, -29, -36, -40, -40, -33, -40, -38, -38, -31, -38, -41, -41, -34, -29];
+  const ARPEGIO = [0, 3, 7, 12, -4, 0, 3, 8, -2, 2, 5, 10, -5, -1, 2, 7];
+  const musica = {
+    paso: 0,
+    siguiente: 0,
+    temporizador: 0,
+    iniciar() {
+      if (this.temporizador || !sonido.contexto || !sonido.activo) return;
+      this.siguiente = sonido.contexto.currentTime + 0.05;
+      this.temporizador = setInterval(() => this.programar(), 60);
+    },
+    detener() {
+      clearInterval(this.temporizador);
+      this.temporizador = 0;
+    },
+    programar() {
+      const c = sonido.contexto;
+      const duracionPaso = efectos.pico > 0 ? 0.11 : 0.15;
+      while (this.siguiente < c.currentTime + 0.2) {
+        const i = this.paso % BAJO.length;
+        sonido.tonoEn(nota(BAJO[i]), this.siguiente, duracionPaso * 0.9, 0.035, "triangle");
+        if (this.paso % 2 === 0) sonido.tonoEn(nota(ARPEGIO[i] + 12), this.siguiente, 0.06, 0.008, "square");
+        this.siguiente += duracionPaso;
+        this.paso++;
+      }
     },
   };
 
@@ -261,9 +341,23 @@
   let sacudida = 0;
   let victoria = false;
   let lanzarDemo = 0;
+  let combo = 0;
+  let multiplicador = 1;
+  let proximoEvento = 0;
+  let ultimoEvento = "";
+  let camaraLenta = 0;
+  let destello = 0;
+  let vidasPerdidasEtapa = 0;
+  let tiempoEtapa = 0;
+  let bono = null;
+  let recargaHotfix = 0;
+  let bug = null;
+  let commits = [];
+  let proyectiles = [];
+  let disparos = [];
 
-  const paleta = { x: ANCHO / 2, objetivo: ANCHO / 2, w: PALETA_NORMAL, y: 0, golpe: 0 };
-  const efectos = { ancho: 0, lento: 0 };
+  const paleta = { x: ANCHO / 2, objetivo: ANCHO / 2, w: PALETA_NORMAL, y: 0, golpe: 0, vel: 0, aturdida: 0 };
+  const efectos = { ancho: 0, lento: 0, pico: 0, hotfix: 0 };
   const teclas = new Set();
   const cohete = { y: 0, activo: false };
   let ladrillos = [];
@@ -322,10 +416,24 @@
       });
     });
     premios = [];
-    efectos.ancho = 0;
-    efectos.lento = 0;
+    for (const clave of Object.keys(efectos)) efectos[clave] = 0;
+    reiniciarIncidentes();
+    combo = 0;
+    multiplicador = 1;
+    vidasPerdidasEtapa = 0;
+    tiempoEtapa = 0;
+    camaraLenta = 0;
+    paleta.aturdida = 0;
+    proximoEvento = azar(...PRIMER_EVENTO);
     velocidad = VEL_BASE + indice * VEL_POR_NIVEL;
     nuevaBola();
+  }
+
+  function reiniciarIncidentes() {
+    bug = null;
+    commits = [];
+    proyectiles = [];
+    disparos = [];
   }
 
   function nuevaBola() {
@@ -370,13 +478,20 @@
     tiempo += dt;
     actualizarParticulas(dt);
     if (sacudida > 0) sacudida = Math.max(0, sacudida - dt);
+    destello = Math.max(0, destello - dt);
     if (modo === "menu") {
       moverPaletaDemo(dt);
       simular(dt, true);
+    } else if (modo === "jugando" && camaraLenta > 0) {
+      camaraLenta -= dt;
+      simular(dt * FACTOR_CAMARA_LENTA, false);
+      if (camaraLenta <= 0) etapaCompleta(false);
     } else if (modo === "jugando") {
       tiempoPartida += dt;
+      tiempoEtapa += dt;
       moverPaletaJugador(dt);
       simular(dt, false);
+      programarEventos(dt);
     } else if (modo === "fin" && cohete.activo) {
       cohete.y -= dt * 90;
       if (!reducido.matches && Math.random() < 0.6) {
@@ -403,20 +518,23 @@
     const anchoObjetivo = efectos.ancho > 0 ? PALETA_ANCHA : PALETA_NORMAL;
     paleta.w += (anchoObjetivo - paleta.w) * Math.min(1, dt * 10);
     const mitad = paleta.w / 2;
+    const antes = paleta.x;
+    paleta.aturdida = Math.max(0, paleta.aturdida - dt);
     paleta.objetivo = limitar(paleta.objetivo, mitad, ANCHO - mitad);
+    if (paleta.aturdida > 0) paleta.objetivo = paleta.x;
     paleta.x += (paleta.objetivo - paleta.x) * Math.min(1, dt * 30);
     paleta.x = limitar(paleta.x, mitad, ANCHO - mitad);
+    if (dt > 0) paleta.vel = (paleta.x - antes) / dt;
     paleta.golpe = Math.max(0, paleta.golpe - dt);
   }
 
   function simular(dt, demo) {
-    efectos.ancho = Math.max(0, efectos.ancho - dt);
-    efectos.lento = Math.max(0, efectos.lento - dt);
+    for (const clave of Object.keys(efectos)) efectos[clave] = Math.max(0, efectos[clave] - dt);
     for (const l of ladrillos) {
       l.entrada = Math.max(0, l.entrada - dt);
       l.brillo = Math.max(0, l.brillo - dt);
     }
-    const factor = efectos.lento > 0 ? FACTOR_LENTO : 1;
+    const factor = (efectos.lento > 0 ? FACTOR_LENTO : 1) * (efectos.pico > 0 ? FACTOR_PICO : 1);
     for (const b of bolas) {
       if (b.pegada) {
         b.x = paleta.x;
@@ -431,8 +549,15 @@
     bolas = bolas.filter((b) => !b.perdida);
     if (antes && !bolas.length) perderBola(demo);
     actualizarPremios(dt);
-    if (restantes === 0 && modo !== "transicion") etapaCompleta(demo);
-    if (!demo) pintarEfectos();
+    if (demo) {
+      if (restantes === 0) etapaCompleta(true);
+      return;
+    }
+    actualizarHotfix(dt);
+    actualizarCommits(dt);
+    actualizarBug(dt);
+    actualizarProyectiles(dt);
+    pintarEfectos();
   }
 
   function moverBola(b, dt, demo) {
@@ -455,7 +580,7 @@
         b.vy = Math.abs(b.vy);
         sonido.tono(300, 0.03);
       }
-      if (chocarPaleta(b) || chocarLadrillo(b, demo)) continue;
+      if (chocarPaleta(b) || chocarLadrillo(b, demo) || (!demo && chocarBug(b))) continue;
       if (b.y - RADIO > alto) {
         b.perdida = true;
         return;
@@ -469,13 +594,15 @@
     if (b.y + RADIO < paleta.y || b.y - RADIO > paleta.y + PALETA_ALTO) return false;
     if (b.x + RADIO < paleta.x - mitad || b.x - RADIO > paleta.x + mitad) return false;
     const relativo = limitar((b.x - paleta.x) / mitad, -1, 1);
-    const angulo = relativo * ANGULO_MAX + azar(-0.03, 0.03);
+    const efecto = limitar(paleta.vel * EFECTO_PALETA, -EFECTO_PALETA_MAX, EFECTO_PALETA_MAX);
+    const angulo = limitar(relativo * ANGULO_MAX + efecto + azar(-0.03, 0.03), -ANGULO_MAX, ANGULO_MAX);
     const v = Math.hypot(b.vx, b.vy);
     b.vx = v * Math.sin(angulo);
     b.vy = -v * Math.cos(angulo);
     b.y = paleta.y - RADIO;
     paleta.golpe = 0.12;
     sonido.tono(220, 0.05);
+    if (modo === "jugando") reiniciarCombo();
     return true;
   }
 
@@ -521,12 +648,235 @@
     sonido.tono(tipo.bicho ? 160 : 660 + Math.random() * 120, tipo.bicho ? 0.12 : 0.05);
     if (tipo.sacude && !reducido.matches) sacudida = 0.18;
     if (demo) return;
-    puntos += tipo.puntos;
-    textos.push({ x: cx, y: l.y, texto: `+${tipo.puntos}`, vida: 0.7 });
+    sumarCombo();
+    sumarPuntos(tipo.puntos, cx, l.y);
     acelerar();
     if (tipo.premioSeguro || Math.random() < PROB_PREMIO) soltarPremio(cx, cy);
     if (tipo.bicho) vibrar(12);
+    if (restantes === 0) iniciarCierre();
+  }
+
+  // ---------- Combo y puntos ----------
+  function sumarCombo() {
+    combo++;
+    const nuevo = Math.min(MULTIPLICADOR_MAX, 1 + Math.floor(combo / COMBO_POR_NIVEL));
+    if (nuevo > multiplicador) {
+      multiplicador = nuevo;
+      textos.push({ x: paleta.x, y: paleta.y - 12, texto: `x${multiplicador}`, vida: 0.9, tono: "signal", escala: 2 });
+      sonido.arpegio([880, 1175], 0.05);
+    }
+  }
+
+  function reiniciarCombo() {
+    combo = 0;
+    multiplicador = 1;
+  }
+
+  function sumarPuntos(base, x, y) {
+    const ganados = base * multiplicador * (efectos.pico > 0 ? 2 : 1);
+    puntos += ganados;
+    textos.push({ x, y, texto: `+${ganados}`, vida: 0.7 });
     pintarHud();
+  }
+
+  /** Último bloque: cámara lenta y destello antes de pasar de etapa. */
+  function iniciarCierre() {
+    camaraLenta = reducido.matches ? 0.01 : CAMARA_LENTA;
+    destello = 0.15;
+    reiniciarIncidentes();
+    premios = [];
+    vibrar(30);
+  }
+
+  // ---------- Incidentes: eventos que interrumpen la etapa ----------
+  const EVENTOS = {
+    pico: {
+      aviso: "Pico de tráfico · puntos x2",
+      tono: "warn",
+      disponible: () => true,
+      iniciar: () => (efectos.pico = DURACION_PICO),
+    },
+    lluvia: {
+      aviso: "Lluvia de commits · atrápalos",
+      tono: "ok",
+      disponible: () => commits.length === 0,
+      iniciar: () => soltarCommits(),
+    },
+    bug: {
+      aviso: "Un bug escapó · derríbalo",
+      tono: "bad",
+      disponible: () => !bug,
+      iniciar: () => soltarBug(),
+    },
+    escalado: {
+      aviso: "Autoescalado · capa nueva",
+      tono: "signal",
+      disponible: () => cabeCapaNueva(),
+      iniciar: () => autoescalar(),
+    },
+  };
+
+  function programarEventos(dt) {
+    if (bolas.every((b) => b.pegada)) return;
+    proximoEvento -= dt;
+    if (proximoEvento > 0) return;
+    proximoEvento = azar(...ENTRE_EVENTOS);
+    const opciones = Object.keys(EVENTOS).filter((k) => k !== ultimoEvento && EVENTOS[k].disponible());
+    if (!opciones.length) return;
+    const clave = opciones[Math.floor(Math.random() * opciones.length)];
+    ultimoEvento = clave;
+    const evento = EVENTOS[clave];
+    evento.iniciar();
+    avisar(evento.aviso, evento.tono, true);
+    sonido.arpegio([1047, 784, 1047, 784], 0.08);
+  }
+
+  function soltarCommits() {
+    for (let i = 0; i < COMMITS_POR_LLUVIA; i++) {
+      commits.push({ x: azar(8, ANCHO - 8), y: -i * 14 - 6, vy: azar(38, 58) });
+    }
+  }
+
+  function actualizarCommits(dt) {
+    const mitad = paleta.w / 2;
+    for (const c of commits) {
+      c.y += c.vy * dt;
+      if (c.y >= paleta.y - 2 && c.y <= paleta.y + PALETA_ALTO + 2 && Math.abs(c.x - paleta.x) <= mitad + 3) {
+        c.fuera = true;
+        sumarPuntos(PUNTOS_COMMIT, c.x, paleta.y - 6);
+        chispas(c.x, paleta.y, 4, ["ok"]);
+        sonido.tono(1319, 0.04, 0.03);
+      } else if (c.y > alto + 6) {
+        c.fuera = true;
+      }
+    }
+    commits = commits.filter((c) => !c.fuera);
+  }
+
+  function fondoLadrillos() {
+    return ladrillos.reduce((max, l) => (l.vivo ? Math.max(max, l.y + LAD_ALTO) : max), LAD_ARRIBA);
+  }
+
+  function soltarBug() {
+    bug = { x: -12, y: fondoLadrillos() + 10, vida: VIDA_BUG, t: 0, disparo: 1.2, golpe: 0, huye: false };
+  }
+
+  function actualizarBug(dt) {
+    if (!bug) return;
+    bug.t += dt;
+    bug.golpe = Math.max(0, bug.golpe - dt);
+    if (bug.t > DURACION_BUG) bug.huye = true;
+    if (bug.huye) {
+      bug.y -= 50 * dt;
+      if (bug.y < -12) bug = null;
+      return;
+    }
+    const centro = ANCHO / 2 + Math.sin(bug.t * 0.9) * (ANCHO / 2 - 14);
+    bug.x += (centro - 6 - bug.x) * Math.min(1, dt * 3);
+    bug.y = Math.min(bug.y, paleta.y - 70) + Math.sin(bug.t * 3) * 0.15;
+    bug.disparo -= dt;
+    if (bug.disparo <= 0) {
+      bug.disparo = azar(1.3, 2.2);
+      proyectiles.push({ x: bug.x + 5, y: bug.y + 8 });
+      sonido.tono(180, 0.06, 0.025, "sawtooth");
+    }
+  }
+
+  function chocarBug(b) {
+    if (!bug || bug.huye) return false;
+    const dx = b.x - (bug.x + 5.5);
+    const dy = b.y - (bug.y + 4);
+    if (Math.abs(dx) > 5.5 + RADIO || Math.abs(dy) > 4 + RADIO) return false;
+    b.vy = dy >= 0 ? Math.abs(b.vy) : -Math.abs(b.vy);
+    herirBug();
+    return true;
+  }
+
+  function herirBug() {
+    bug.vida--;
+    bug.golpe = 0.12;
+    chispas(bug.x + 5, bug.y + 4, 6, ["bad", "foreground"]);
+    sonido.tono(140, 0.08);
+    if (bug.vida > 0) return;
+    chispas(bug.x + 5, bug.y + 4, reducido.matches ? 6 : 24, ["bad", "warn", "foreground"], 90);
+    sumarPuntos(PUNTOS_BUG, bug.x + 5, bug.y);
+    avisar("Bug corregido", "ok");
+    destello = 0.1;
+    if (!reducido.matches) sacudida = 0.25;
+    vibrar(25);
+    soltarPremio(bug.x + 5, bug.y + 4);
+    bug = null;
+  }
+
+  function actualizarProyectiles(dt) {
+    const mitad = paleta.w / 2;
+    for (const p of proyectiles) {
+      p.y += VEL_PROYECTIL * dt;
+      if (p.y >= paleta.y && p.y <= paleta.y + PALETA_ALTO + 3 && Math.abs(p.x - paleta.x) <= mitad) {
+        p.fuera = true;
+        paleta.aturdida = DURACION_ATURDIDO;
+        reiniciarCombo();
+        chispas(p.x, paleta.y, 10, ["bad", "warn"]);
+        avisar("Error en producción · paleta aturdida", "bad");
+        sonido.arpegio([200, 150], 0.06);
+        vibrar(35);
+      } else if (p.y > alto + 4) {
+        p.fuera = true;
+      }
+    }
+    proyectiles = proyectiles.filter((p) => !p.fuera);
+  }
+
+  function cabeCapaNueva() {
+    return fondoLadrillos() + LAD_ALTO + LAD_SEP + HUECO_ESCALADO < paleta.y;
+  }
+
+  function autoescalar() {
+    for (const l of ladrillos) {
+      l.y += LAD_ALTO + LAD_SEP;
+      l.baja = 0.2;
+    }
+    for (let k = 0; k < COLUMNAS; k++) {
+      const c = Math.random() < 0.15 ? "p" : Math.random() < 0.4 ? "2" : "1";
+      ladrillos.push({
+        x: MARGEN_X + k * (LAD_ANCHO + LAD_SEP),
+        y: LAD_ARRIBA,
+        tipo: c,
+        golpes: TIPOS[c].golpes,
+        vivo: true,
+        brillo: 0,
+        entrada: reducido.matches ? 0 : 0.1 + k * 0.03,
+      });
+      restantes++;
+    }
+  }
+
+  function actualizarHotfix(dt) {
+    if (efectos.hotfix > 0) {
+      recargaHotfix -= dt;
+      if (recargaHotfix <= 0) {
+        recargaHotfix = CADENCIA_HOTFIX;
+        const mitad = paleta.w / 2 - 2;
+        disparos.push({ x: paleta.x - mitad, y: paleta.y - 2 }, { x: paleta.x + mitad, y: paleta.y - 2 });
+        sonido.tono(1500, 0.02, 0.015);
+      }
+    }
+    for (const d of disparos) {
+      d.y -= VEL_DISPARO * dt;
+      if (d.y < -4) d.fuera = true;
+      for (const l of ladrillos) {
+        if (d.fuera || !l.vivo || l.entrada > 0) continue;
+        if (d.x >= l.x && d.x <= l.x + LAD_ANCHO && d.y >= l.y && d.y <= l.y + LAD_ALTO) {
+          d.fuera = true;
+          golpear(l, false);
+        }
+      }
+      if (!d.fuera && bug && !bug.huye && d.x >= bug.x && d.x <= bug.x + 11 && d.y >= bug.y && d.y <= bug.y + 8) {
+        d.fuera = true;
+        herirBug();
+      }
+    }
+    disparos = disparos.filter((d) => !d.fuera);
   }
 
   function acelerar() {
@@ -570,9 +920,13 @@
       return;
     }
     vidas--;
+    vidasPerdidasEtapa++;
     efectos.ancho = 0;
     efectos.lento = 0;
+    efectos.hotfix = 0;
+    reiniciarCombo();
     premios = [];
+    proyectiles = [];
     if (!reducido.matches) sacudida = 0.3;
     vibrar(40);
     sonido.arpegio([330, 220, 140], 0.09);
@@ -588,6 +942,11 @@
     }
     bolas = [];
     sonido.arpegio([523, 659, 784, 1047]);
+    const bonoTiempo = Math.max(0, Math.round((BONO_TIEMPO_BASE - tiempoEtapa * BONO_TIEMPO_POR_S) / 10) * 10);
+    const bonoPerfecto = vidasPerdidasEtapa === 0 ? BONO_PERFECTO : 0;
+    bono = { etapa: ETAPAS[nivel].nombre, tiempo: bonoTiempo, perfecto: bonoPerfecto };
+    puntos += bonoTiempo + bonoPerfecto;
+    pintarHud();
     if (nivel === ETAPAS.length - 1) terminar(true);
     else mostrarEtapa(nivel + 1);
   }
@@ -635,13 +994,13 @@
     }
   }
 
-  function pintarTexto(texto, x, y, tono) {
-    const anchoTotal = texto.length * 4 - 1;
-    let cursor = Math.round(x - anchoTotal / 2);
+  function pintarTexto(texto, x, y, tono, escala = 1) {
+    const anchoTotal = (texto.length * 4 - 1) * escala;
+    let cursor = Math.round(limitar(x - anchoTotal / 2, 1, ANCHO - anchoTotal - 1));
     for (const ch of texto) {
       const glifo = GLIFOS[ch];
-      if (glifo) pintarSprite(glifo, cursor, Math.round(y), { x: tono });
-      cursor += 4;
+      if (glifo) pintarSprite(glifo, cursor, Math.round(y), { x: tono }, escala);
+      cursor += 4 * escala;
     }
   }
 
@@ -656,7 +1015,8 @@
 
   function dibujarLadrillo(l) {
     const tipo = TIPOS[l.tipo];
-    const caida = Math.ceil(l.entrada * 8) * 6;
+    l.baja = Math.max(0, (l.baja ?? 0) - 1 / 60);
+    const caida = Math.ceil(l.entrada * 8) * 6 + Math.ceil(l.baja * 50);
     const x = l.x;
     const y = l.y - caida;
     if (caida > alto) return;
@@ -702,8 +1062,15 @@
     const x = Math.round(paleta.x - w / 2);
     const aplasta = paleta.golpe > 0 ? 1 : 0;
     const y = paleta.y + aplasta;
-    const borde = efectos.ancho > 0 ? "ok" : "primary";
-    bloque(x, y, w, PALETA_ALTO - aplasta, "primary", borde);
+    const aturdida = paleta.aturdida > 0;
+    const borde = aturdida ? "bad" : efectos.ancho > 0 ? "ok" : "primary";
+    const relleno = aturdida && Math.floor(tiempo * 12) % 2 === 0 ? "faint" : "primary";
+    bloque(x + (aturdida ? Math.round(azar(-1, 1)) : 0), y, w, PALETA_ALTO - aplasta, relleno, borde);
+    if (efectos.hotfix > 0) {
+      ctx.fillStyle = color.bad;
+      ctx.fillRect(x + 1, y - 2, 2, 2);
+      ctx.fillRect(x + w - 3, y - 2, 2, 2);
+    }
     if (efectos.ancho > 0) {
       ctx.fillStyle = color.ok;
       ctx.fillRect(x + 1, y + 1, 2, PALETA_ALTO - 2 - aplasta);
@@ -742,16 +1109,49 @@
     if (sacudida > 0) {
       ctx.translate(Math.round(azar(-2, 2)), Math.round(azar(-2, 2)));
     }
+    if (efectos.pico > 0 && Math.floor(tiempo * 4) % 2 === 0) {
+      ctx.fillStyle = color.warn;
+      ctx.fillRect(0, 0, ANCHO, 1);
+      ctx.fillRect(0, 0, 1, alto);
+      ctx.fillRect(ANCHO - 1, 0, 1, alto);
+    }
     for (const l of ladrillos) if (l.vivo) dibujarLadrillo(l);
     for (const p of premios) dibujarPremio(p);
+    for (const c of commits) pintarSprite(COMMIT, Math.round(c.x) - 2, Math.round(c.y) - 2, { x: "ok" });
+    if (bug) dibujarBug();
+    ctx.fillStyle = color.bad;
+    for (const p of proyectiles) {
+      const parpadeo = Math.floor(tiempo * 10) % 2;
+      ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y), 2, 3);
+      ctx.fillRect(Math.round(p.x) - 1 + parpadeo * 2 - 1, Math.round(p.y) + 3, 1, 1);
+    }
+    for (const d of disparos) ctx.fillRect(Math.round(d.x), Math.round(d.y), 1, 4);
     if (!cohete.activo) dibujarPaleta();
     for (const b of bolas) dibujarBola(b);
     for (const p of particulas) {
       ctx.fillStyle = color[p.tono] ?? color.foreground;
       ctx.fillRect(Math.round(p.x), Math.round(p.y), p.tam, p.tam);
     }
-    for (const t of textos) pintarTexto(t.texto, t.x, t.y, "foreground");
+    for (const t of textos) pintarTexto(t.texto, t.x, t.y, t.tono ?? "foreground", t.escala ?? 1);
     if (cohete.activo) dibujarCohete();
+    if (destello > 0) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = Math.min(0.7, destello * 5);
+      ctx.fillStyle = color.card;
+      ctx.fillRect(0, 0, ANCHO, alto);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function dibujarBug() {
+    const cuadro = BUG_GRANDE[Math.floor(tiempo * 5) % BUG_GRANDE.length];
+    const x = Math.round(bug.x);
+    const y = Math.round(bug.y);
+    pintarSprite(cuadro, x, y, { x: bug.golpe > 0 ? "card" : "bad" });
+    ctx.fillStyle = color["border-strong"];
+    ctx.fillRect(x, y - 3, 11, 1);
+    ctx.fillStyle = color.bad;
+    ctx.fillRect(x, y - 3, Math.round((11 * bug.vida) / VIDA_BUG), 1);
   }
 
   // ---------- HUD y capas (DOM, solo cuando algo cambia) ----------
@@ -787,20 +1187,24 @@
 
   function pintarEfectos() {
     const partes = [];
-    if (efectos.ancho > 0) partes.push(`caché ${Math.ceil(efectos.ancho)} s`);
-    if (efectos.lento > 0) partes.push(`lento ${Math.ceil(efectos.lento)} s`);
+    if (multiplicador > 1) partes.push(`x${multiplicador}`);
+    if (efectos.pico > 0) partes.push(`pico ${Math.ceil(efectos.pico)}`);
+    if (efectos.hotfix > 0) partes.push(`hotfix ${Math.ceil(efectos.hotfix)}`);
+    if (efectos.ancho > 0) partes.push(`caché ${Math.ceil(efectos.ancho)}`);
+    if (efectos.lento > 0) partes.push(`lento ${Math.ceil(efectos.lento)}`);
+    if (paleta.aturdida > 0) partes.push("aturdida");
     const texto = partes.join(" · ");
     if (texto !== ultimoEfecto) hud.efectos.textContent = ultimoEfecto = texto;
     const pegada = modo === "jugando" && bolas.some((b) => b.pegada);
     if (hud.pista.hidden === pegada) hud.pista.hidden = !pegada;
   }
 
-  function avisar(texto, tono) {
+  function avisar(texto, tono, grande = false) {
     hud.aviso.textContent = texto;
-    hud.aviso.className = `aviso px mono tono-${tono === "muted-foreground" ? "muted" : tono}`;
+    hud.aviso.className = `aviso px mono tono-${tono === "muted-foreground" ? "muted" : tono}${grande ? " grande" : ""}`;
     hud.aviso.hidden = false;
     clearTimeout(temporizadorAviso);
-    temporizadorAviso = setTimeout(() => (hud.aviso.hidden = true), 1600);
+    temporizadorAviso = setTimeout(() => (hud.aviso.hidden = true), grande ? 2400 : 1600);
   }
 
   const capas = {
@@ -830,6 +1234,8 @@
 
   function irAlMenu() {
     modo = "menu";
+    musica.detener();
+    reiniciarIncidentes();
     victoria = false;
     cohete.activo = false;
     hud.pausa.disabled = true;
@@ -849,6 +1255,7 @@
     victoria = false;
     cohete.activo = false;
     particulas = [];
+    bono = null;
     pintarHud();
     mostrarEtapa(0);
   }
@@ -863,10 +1270,20 @@
     $("#etapa-num").textContent = `Etapa ${indice + 1} de ${ETAPAS.length}`;
     $("#titulo-etapa").textContent = etapa.nombre;
     escribirComando(`$ ${etapa.comando}`, etapa.listo);
+    $("#etapa-bono").textContent = bono ? textoBono(bono) : "";
+    $("#etapa-bono").hidden = !bono;
     ladrillos = [];
     bolas = [];
     premios = [];
+    reiniciarIncidentes();
+    musica.detener();
     mostrarCapa("etapa");
+  }
+
+  function textoBono(b) {
+    const partes = [`${b.etapa} lista`, `+${b.tiempo} por tiempo`];
+    if (b.perfecto) partes.push(`+${b.perfecto} sin caídas`);
+    return partes.join(" · ");
   }
 
   function escribirComando(comando, listo) {
@@ -899,12 +1316,14 @@
     modo = "jugando";
     hud.pausa.disabled = false;
     mostrarCapa(null);
+    musica.iniciar();
     pintarEfectos();
   }
 
   function pausar() {
     if (modo !== "jugando") return;
     modo = "pausa";
+    musica.detener();
     teclas.clear();
     mostrarCapa("pausa");
   }
@@ -913,6 +1332,7 @@
     if (modo !== "pausa") return;
     modo = "jugando";
     mostrarCapa(null);
+    musica.iniciar();
     pintarEfectos();
   }
 
@@ -920,8 +1340,11 @@
     modo = "fin";
     victoria = gano;
     hud.pausa.disabled = true;
+    musica.detener();
     bolas = [];
     premios = [];
+    reiniciarIncidentes();
+    const record = puntos > mejor && puntos > 0;
     if (puntos > mejor) {
       mejor = puntos;
       almacen.escribir("hola-deploya-mejor", String(mejor));
@@ -950,11 +1373,19 @@
     $("#fin-puntos").textContent = String(puntos);
     $("#fin-mejor").textContent = String(mejor);
     $("#fin-tiempo").textContent = `${Math.round(tiempoPartida)} s`;
+    $("#fin-record").hidden = !record;
     setTimeout(() => modo === "fin" && mostrarCapa("fin"), gano ? 1400 : 500);
   }
 
   // ---------- Invitar: QR de la URL pública del despliegue ----------
   const QR_MARGEN = 2;
+  const QR_INSIGNIA = 14;
+  const QR_VERSION_MIN = 5;
+  const QR_VERSION_MAX = 20;
+  // El QR siempre usa la paleta clara: tinta oscura sobre papel es lo que leen mejor las cámaras.
+  const QR_TINTA = aColorLienzo("oklch(0.2 0.012 70)");
+  const QR_SENAL = aColorLienzo("oklch(0.5 0.15 250)");
+  const QR_PAPEL = aColorLienzo("oklch(0.995 0.003 85)");
   let cargaQr = null;
 
   /** La librería del QR (20 KB) solo se descarga la primera vez que alguien pulsa Invitar. */
@@ -972,6 +1403,51 @@
     return cargaQr;
   }
 
+  /** Versión 5 o mayor: con menos módulos la insignia taparía demasiado del código. */
+  function crearQr(generador, url) {
+    for (let version = QR_VERSION_MIN; version <= QR_VERSION_MAX; version++) {
+      try {
+        const qr = generador(version, "H");
+        qr.addData(url);
+        qr.make();
+        return qr;
+      } catch {
+        /* no cabe en esta versión: probar la siguiente */
+      }
+    }
+    throw new Error("La dirección es demasiado larga para un QR");
+  }
+
+  const esBuscador = (f, c, n) => (f < 7 && c < 7) || (f < 7 && c >= n - 7) || (f >= n - 7 && c < 7);
+
+  function dibujarQr(destino, qr) {
+    const n = qr.getModuleCount();
+    const lado = n + QR_MARGEN * 2;
+    destino.width = lado;
+    destino.height = lado;
+    const q = destino.getContext("2d");
+    q.fillStyle = QR_PAPEL;
+    q.fillRect(0, 0, lado, lado);
+    const inicio = Math.floor((n - QR_INSIGNIA) / 2);
+    const enInsignia = (f, c) => f >= inicio && f < inicio + QR_INSIGNIA && c >= inicio && c < inicio + QR_INSIGNIA;
+    for (let f = 0; f < n; f++) {
+      for (let c = 0; c < n; c++) {
+        if (!qr.isDark(f, c) || enInsignia(f, c)) continue;
+        q.fillStyle = esBuscador(f, c, n) ? QR_SENAL : QR_TINTA;
+        q.fillRect(c + QR_MARGEN, f + QR_MARGEN, 1, 1);
+      }
+    }
+    // Insignia: la «a» del logo dentro de un marco escalonado.
+    const x0 = inicio + QR_MARGEN;
+    q.fillStyle = QR_TINTA;
+    q.fillRect(x0 + 1, x0 + 1, QR_INSIGNIA - 2, QR_INSIGNIA - 2);
+    q.fillStyle = QR_PAPEL;
+    q.fillRect(x0 + 2, x0 + 2, QR_INSIGNIA - 4, QR_INSIGNIA - 4);
+    const glifo = LETRA_A;
+    q.fillStyle = QR_SENAL;
+    glifo.forEach((fila, y) => [...fila].forEach((ch, x) => ch === "x" && q.fillRect(x0 + 2 + x, x0 + 2 + y, 1, 1)));
+  }
+
   async function invitar() {
     const url = `${location.origin}/`;
     const estado = $("#qr-estado");
@@ -983,21 +1459,8 @@
     mostrarCapa("invitar");
     try {
       const generador = await cargarLibreriaQr();
-      const qr = generador(0, "M");
-      qr.addData(url);
-      qr.make();
-      const modulos = qr.getModuleCount();
-      const lado = modulos + QR_MARGEN * 2;
-      qrLienzo.width = lado;
-      qrLienzo.height = lado;
-      const q = qrLienzo.getContext("2d");
-      // Siempre tinta oscura sobre fondo claro: los lectores fallan con QR invertidos.
-      q.fillStyle = "#fff";
-      q.fillRect(0, 0, lado, lado);
-      q.fillStyle = "#000";
-      for (let f = 0; f < modulos; f++) {
-        for (let c = 0; c < modulos; c++) if (qr.isDark(f, c)) q.fillRect(c + QR_MARGEN, f + QR_MARGEN, 1, 1);
-      }
+      // Corrección H (30 %): deja espacio para la insignia pixel del centro sin perder lectura.
+      dibujarQr(qrLienzo, crearQr(generador, url));
       qrLienzo.hidden = false;
       estado.hidden = true;
     } catch {
@@ -1018,6 +1481,8 @@
       sonido.activo = !sonido.activo;
       almacen.escribir("hola-deploya-sonido", sonido.activo ? "1" : "0");
       sonido.despertar();
+      if (!sonido.activo) musica.detener();
+      else if (modo === "jugando") musica.iniciar();
       pintarSonido();
     },
   };
@@ -1094,6 +1559,11 @@
   addEventListener("keyup", (e) => TECLAS[e.key] && teclas.delete(TECLAS[e.key]));
   addEventListener("blur", () => teclas.clear());
   document.addEventListener("visibilitychange", () => document.hidden && pausar());
+  // iOS: sin esto el navegador arrastra toda la página (rebote, deslizar para volver) cuando el dedo llega a los bordes.
+  const permiteDesplazar = (e) => e.target.closest?.(".capa .panel");
+  document.addEventListener("touchmove", (e) => !permiteDesplazar(e) && e.preventDefault(), { passive: false });
+  escenario.addEventListener("touchstart", (e) => modo === "jugando" && !e.target.closest(".capa") && e.preventDefault(), { passive: false });
+  for (const gesto of ["gesturestart", "gesturechange", "dblclick"]) document.addEventListener(gesto, (e) => e.preventDefault());
   addEventListener("resize", ajustarTamano);
   matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", (e) => {
     const guardado = almacen.leer("deploya-tema", "system");

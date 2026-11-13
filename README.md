@@ -7,9 +7,15 @@ App de la demo de Deploya: un **rompe-bloques en pixel art**, pensado primero pa
 - **Cinco etapas = cinco niveles:** Recepción, Construcción, Ejecución, Enrutamiento y Operación. El riel del HUD avanza como en Deploya. Antes de cada etapa la bitácora escribe el comando de esa etapa.
 - **Ganas** al terminar Operación: el cohete despega y la app queda **Saludable** en el dominio y la versión del despliegue (`DEPLOYA_VERSION`). **Pierdes** sin vidas: **Fallido · código 137**.
 - **Bloques:** normal, doble capa (dos golpes), error (`bad`, vale 50), premio (`+` en Señal, siempre suelta un premio) y metal (no se rompe).
-- **Premios:** C caché (paleta ancha), R réplica (dos bolas más), + rollback (una vida más), L lento (la bola frena).
+- **Premios:** C caché (paleta ancha), R réplica (dos bolas más), + rollback (una vida más), L lento (la bola frena), H hotfix (la paleta dispara).
+- **Combo:** cada 4 bloques sin tocar la paleta sube el multiplicador (hasta x5).
+- **Incidentes en vivo**, cada 15–22 s: pico de tráfico (puntos x2, la bola acelera y la música sube de tempo), lluvia de commits que hay que atrapar, un bug que cruza disparando errores (si te tocan, la paleta queda aturdida un segundo) y autoescalado (las capas bajan y aparece una nueva).
+- **Entre etapas:** bono por tiempo y +500 si no perdiste vidas. El último bloque se ve en cámara lenta.
+- La paleta da efecto a la bola según cómo la muevas. Hay música chiptune en WebAudio, que se apaga con el botón de sonido.
 - **Controles:** en móvil arrastras para mover la paleta y tocas para lanzar. En escritorio usas el mouse o ← → / A D; Espacio lanza, P o Esc pausa y Enter sigue.
 - En el menú corre una **demo automática** de fondo.
+- **Logo:** `public/logo-claro.webp` (tinta, para fondo claro) y `public/logo-oscuro.webp` (blanco con contorno, para fondo oscuro), según el tema. Los originales están en `marca/`.
+- **En iPhone** la página está fija: no rebota ni se arrastra al llevar el dedo a los bordes. Solo los paneles largos se desplazan.
 - **Invitar** muestra en grande el QR de la URL pública del despliegue (`location.origin`, la que publica Deploya), para proyectarlo y que la gente escanee y entre. El generador (`public/qr.js`, qrcode-generator 1.4.4, MIT) vive en el repo y solo se descarga al pulsar el botón: no depende de ningún CDN.
 
 ## Cómo está hecho (ligero)
