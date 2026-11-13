@@ -804,6 +804,7 @@
   }
 
   const capas = {
+    invitar: $("#capa-invitar"),
     menu: $("#capa-menu"),
     ayuda: $("#capa-ayuda"),
     etapa: $("#capa-etapa"),
@@ -952,6 +953,58 @@
     setTimeout(() => modo === "fin" && mostrarCapa("fin"), gano ? 1400 : 500);
   }
 
+  // ---------- Invitar: QR de la URL pública del despliegue ----------
+  const QR_MARGEN = 2;
+  let cargaQr = null;
+
+  /** La librería del QR (20 KB) solo se descarga la primera vez que alguien pulsa Invitar. */
+  function cargarLibreriaQr() {
+    cargaQr ??= new Promise((resuelve, rechaza) => {
+      const script = document.createElement("script");
+      script.src = `qr.js?v=${encodeURIComponent(VERSION)}`;
+      script.onload = () => resuelve(window.qrcode);
+      script.onerror = () => {
+        cargaQr = null;
+        rechaza(new Error("No se pudo cargar el generador de QR"));
+      };
+      document.head.append(script);
+    });
+    return cargaQr;
+  }
+
+  async function invitar() {
+    const url = `${location.origin}/`;
+    const estado = $("#qr-estado");
+    const qrLienzo = $("#qr");
+    $("#qr-url").textContent = url;
+    estado.hidden = false;
+    estado.textContent = "Generando código…";
+    qrLienzo.hidden = true;
+    mostrarCapa("invitar");
+    try {
+      const generador = await cargarLibreriaQr();
+      const qr = generador(0, "M");
+      qr.addData(url);
+      qr.make();
+      const modulos = qr.getModuleCount();
+      const lado = modulos + QR_MARGEN * 2;
+      qrLienzo.width = lado;
+      qrLienzo.height = lado;
+      const q = qrLienzo.getContext("2d");
+      // Siempre tinta oscura sobre fondo claro: los lectores fallan con QR invertidos.
+      q.fillStyle = "#fff";
+      q.fillRect(0, 0, lado, lado);
+      q.fillStyle = "#000";
+      for (let f = 0; f < modulos; f++) {
+        for (let c = 0; c < modulos; c++) if (qr.isDark(f, c)) q.fillRect(c + QR_MARGEN, f + QR_MARGEN, 1, 1);
+      }
+      qrLienzo.hidden = false;
+      estado.hidden = true;
+    } catch {
+      estado.textContent = "No se pudo generar el código. Comparte la dirección de abajo.";
+    }
+  }
+
   // ---------- Entrada ----------
   const ACCIONES = {
     jugar,
@@ -959,6 +1012,7 @@
     reanudar,
     menu: irAlMenu,
     ayuda: () => mostrarCapa("ayuda"),
+    invitar,
     tema: () => aplicarTema(temaActual() === "dark" ? "light" : "dark"),
     sonido: () => {
       sonido.activo = !sonido.activo;

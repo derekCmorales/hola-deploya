@@ -10,6 +10,7 @@ App de la demo de Deploya: un **rompe-bloques en pixel art**, pensado primero pa
 - **Premios:** C caché (paleta ancha), R réplica (dos bolas más), + rollback (una vida más), L lento (la bola frena).
 - **Controles:** en móvil arrastras para mover la paleta y tocas para lanzar. En escritorio usas el mouse o ← → / A D; Espacio lanza, P o Esc pausa y Enter sigue.
 - En el menú corre una **demo automática** de fondo.
+- **Invitar** muestra en grande el QR de la URL pública del despliegue (`location.origin`, la que publica Deploya), para proyectarlo y que la gente escanee y entre. El generador (`public/qr.js`, qrcode-generator 1.4.4, MIT) vive en el repo y solo se descarga al pulsar el botón: no depende de ningún CDN.
 
 ## Cómo está hecho (ligero)
 
